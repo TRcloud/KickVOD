@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="BANNER.png" alt="KickDownloader Pro Logo" width="800" />
+  <img src="KickVOD/BANNER.png" alt="KickDownloader Pro Logo" width="800" />
 </div>
 
 # 🟢 KickDownloader Pro
