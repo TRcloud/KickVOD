@@ -1,0 +1,7 @@
+.vs/
+KickVOD/bin/
+KickVOD/obj/
+*.exe
+*.dll
+*.user
+!KickVOD/yt-dlp.exe
