@@ -19,6 +19,12 @@ KickDownloader Pro, Kick.com üzerindeki canlı yayın tekrarlarını (VOD) ve k
 
 ---
 
+## 💡 Kullanım Önerisi
+
+Program bağımsız (portable) olarak çalışır ve gereksinim duyduğu \fmpeg.exe\ ve \yt-dlp.exe\ araçlarını ilk çalıştırıldığında kendi yanına indirir. Masaüstünüzün kirlenmemesi için, **EXE dosyasını boş bir klasörün içine koyarak (örneğin "KickDownloader") kullanmanız şiddetle önerilir.**
+
+---
+
 ## 🛠️ Gereksinimler
 
 - **İşletim Sistemi:** Windows 10 veya Windows 11
@@ -26,9 +32,17 @@ KickDownloader Pro, Kick.com üzerindeki canlı yayın tekrarlarını (VOD) ve k
 
 ## 🚀 Kurulum & Çalıştırma
 
-1. Releases kısmından en güncel .exe dosyasını indirin. (Eğer Self-Contained versiyonu indirdiyseniz bilgisayarınızda .NET yüklü olmasına bile gerek yoktur.)
-2. Programı çalıştırın. Uygulama, video indirme işlemleri için gereken **ffmpeg.exe** ve **yt-dlp.exe** araçlarını ilk açılışta kendisi indirip sizin için hazır hale getirecektir. İndirme durumu alt kısımdaki bilgi çubuğunda gösterilir.
-3. Aradan sonra indirme yapmaya başlayabilirsiniz!
+1. Releases kısmından en güncel .zip dosyasını indirin. (Eğer Self-Contained versiyonu indirdiyseniz bilgisayarınızda .NET yüklü olmasına bile gerek yoktur.)
+2. Programı bir klasöre çıkartın ve çalıştırın. Uygulama, video indirme işlemleri için gereken **ffmpeg.exe** ve **yt-dlp.exe** araçlarını ilk açılışta kendisi indirim sizin için hazır hale getirecektir. İndirme durumu alt kısımdaki bilgi çubuğunda gösterilir.
+3. Araçlar indikten sonra videoları indirmeye başlayabilirsiniz!
+
+---
+
+## 📞 İletişim
+
+- **GitHub:** [TRcloud/KickVOD](https://github.com/TRcloud/KickVOD)
+- **Discord Davet:** [Kanalımıza Katılın](https://discord.gg/eEwShe3dqf)
+- **Kişisel Discord İletişim:** \cloud.are\
 
 ## 📄 Lisans
 © ® Vibe Coding
