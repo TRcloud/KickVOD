@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -72,23 +74,57 @@ namespace KickVOD.Services
             _httpClient.DefaultRequestHeaders.Add("Referer", "https://kick.com/");
         }
 
-        private async Task EnsureDependenciesExistAsync()
+        public async Task EnsureDependenciesExistAsync()
         {
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string ffmpegPath = Path.Combine(baseDir, "ffmpeg.exe");
             string ytDlpPath = Path.Combine(baseDir, "yt-dlp.exe");
 
-            if (!File.Exists(ytDlpPath))
+            bool missing = !File.Exists(ytDlpPath) || !File.Exists(ffmpegPath);
+            if (missing)
             {
-                throw new Exception("yt-dlp.exe bulunamadı! Lütfen program dosyalarının içinde olduğundan emin olun.");
+                OnStatusMessageChanged?.Invoke(this, "Eksik araçlar (yt-dlp ve ffmpeg) indiriliyor, bu işlem internet hızınıza bağlı olarak birkaç dakika sürebilir. Lütfen bekleyin...");
+                try
+                {
+                    if (!File.Exists(ytDlpPath))
+                    {
+                        OnStatusMessageChanged?.Invoke(this, "Aşama 1/2: yt-dlp indiriliyor...");
+                        var ytDlpBytes = await _httpClient.GetByteArrayAsync("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe");
+                        await File.WriteAllBytesAsync(ytDlpPath, ytDlpBytes);
+                    }
+
+                    if (!File.Exists(ffmpegPath))
+                    {
+                        OnStatusMessageChanged?.Invoke(this, "Aşama 2/2: ffmpeg indiriliyor ve çıkarılıyor (boyutu biraz büyük olabilir)...");
+                        string zipPath = Path.Combine(baseDir, "ffmpeg.zip");
+                        var ffmpegZipBytes = await _httpClient.GetByteArrayAsync("https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip");
+                        await File.WriteAllBytesAsync(zipPath, ffmpegZipBytes);
+
+                        using (var archive = System.IO.Compression.ZipFile.OpenRead(zipPath))
+                        {
+                            var entry = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("ffmpeg.exe", StringComparison.OrdinalIgnoreCase));
+                            if (entry != null)
+                            {
+                                entry.ExtractToFile(ffmpegPath, true);
+                            }
+                        }
+                        File.Delete(zipPath);
+                    }
+
+                    OnStatusMessageChanged?.Invoke(this, "Gerekli araçlar başarıyla indirildi. Kullanıma hazır!");
+                }
+                catch (Exception ex)
+                {
+                    OnStatusMessageChanged?.Invoke(this, "Araçlar indirilirken hata oluştu!");
+                    throw new Exception("Araçlar indirilirken hata oluştu: " + ex.Message + "\nLütfen programı yönetici olarak çalıştırın veya internet bağlantınızı kontrol edin.");
+                }
             }
+
+            if (!File.Exists(ytDlpPath))
+                throw new Exception("yt-dlp.exe bulunamadı!");
 
             if (!File.Exists(ffmpegPath))
-            {
-                throw new Exception("ffmpeg.exe bulunamadı! Lütfen program dosyalarının içinde olduğundan emin olun.");
-            }
-
-            await Task.CompletedTask;
+                throw new Exception("ffmpeg.exe bulunamadı!");
         }
 
         public async Task<VideoMetadata> FetchMetadataAsync(string url)
@@ -107,7 +143,7 @@ namespace KickVOD.Services
                 var processInfo = new ProcessStartInfo
                 {
                     FileName = ytDlpPath,
-                    Arguments = $"--dump-json \"{url}\"",
+                    Arguments = $"--dump-json --no-warnings --no-playlist \"{url}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -127,13 +163,39 @@ namespace KickVOD.Services
                     throw new Exception($"Veri çekilemedi. Bağlantıyı kontrol edin.\nDetay: {error}");
                 }
 
-                using var doc = JsonDocument.Parse(jsonOutput);
+                // Eger birden fazla JSON nesnesi (playlist vs) veya hata mesaji varsa sadece JSON'u alalim
+                string[] lines = jsonOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                string validJson = System.Linq.Enumerable.FirstOrDefault(lines, l => l.TrimStart().StartsWith("{"));
+
+                if (string.IsNullOrEmpty(validJson))
+                {
+                    throw new Exception("Geçerli bir video bilgisi bulunamadı.\nDetay: " + (string.IsNullOrWhiteSpace(error) ? jsonOutput : error));
+                }
+
+                using var doc = JsonDocument.Parse(validJson);
                 var root = doc.RootElement;
 
                 metadata.Title = root.TryGetProperty("title", out var t) ? t.GetString() : "VOD";
                 metadata.ChannelName = root.TryGetProperty("uploader", out var u) ? u.GetString() : "Bilinmeyen Yayıncı";
                 metadata.ThumbnailUrl = root.TryGetProperty("thumbnail", out var th) ? th.GetString() : "";
-                metadata.VideoUrl = root.TryGetProperty("url", out var vUrl) ? vUrl.GetString() : "";
+
+                string foundUrl = "";
+                if (root.TryGetProperty("url", out var vUrl) && !string.IsNullOrEmpty(vUrl.GetString()))
+                {
+                    foundUrl = vUrl.GetString();
+                }
+                else if (root.TryGetProperty("requested_formats", out var reqFormats) && reqFormats.ValueKind == JsonValueKind.Array && reqFormats.GetArrayLength() > 0)
+                {
+                    if (reqFormats[0].TryGetProperty("url", out var rfUrl))
+                        foundUrl = rfUrl.GetString();
+                }
+                else if (root.TryGetProperty("requested_downloads", out var reqDownloads) && reqDownloads.ValueKind == JsonValueKind.Array && reqDownloads.GetArrayLength() > 0)
+                {
+                    if (reqDownloads[0].TryGetProperty("url", out var rdUrl))
+                        foundUrl = rdUrl.GetString();
+                }
+
+                metadata.VideoUrl = foundUrl;
                 metadata.OriginalUrl = url;
 
                 if (root.TryGetProperty("duration", out var d) && d.ValueKind == JsonValueKind.Number)
@@ -208,7 +270,7 @@ namespace KickVOD.Services
                     var getUrlInfo = new ProcessStartInfo
                     {
                         FileName = ytDlpPath,
-                        Arguments = $"-f \"bestvideo[height<={height}]+bestaudio/best[height<={height}]\" --get-url \"{metadata.OriginalUrl}\"",
+                        Arguments = $"--no-warnings --no-playlist -f \"best[height<={height}]\" --get-url \"{metadata.OriginalUrl}\"",
                         RedirectStandardOutput = true,
                         UseShellExecute = false,
                         CreateNoWindow = true
@@ -241,11 +303,11 @@ namespace KickVOD.Services
                 if (!string.IsNullOrWhiteSpace(endTime)) timeArgs += $"-to {endTime} ";
 
                 string arguments = $"-y {timeArgs}-i \"{streamUrl}\" -c copy ";
-                
-                // VOD'lar için bsf:a gerekir, ancak klip direkt mp4 dönüyorsa bazen hata verebilir. İkisi de copy çalışır.
-                if (!metadata.IsClip) 
+
+                // VOD'lar için bsf:a gerekir (eğer m3u8 playlist ise). MP4 formatlılarda hata verebilir.
+                if (streamUrl.Contains(".m3u8")) 
                     arguments += "-bsf:a aac_adtstoasc ";
-                    
+
                 arguments += $"\"{outputPath}\"";
 
                 _downloadProcess = new Process

@@ -26,6 +26,29 @@ namespace KickVOD
             UrlTextBox.GotFocus += UrlTextBox_GotFocus;
             QualityComboBox.Items.Add("En İyi");
             QualityComboBox.SelectedIndex = 0;
+            this.Loaded += MainWindow_Loaded;
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DownloadButton.IsEnabled = false;
+                UrlTextBox.IsEnabled = false;
+                StatusTextBlock.Text = "Araçlar kontrol ediliyor...";
+                await _downloader.EnsureDependenciesExistAsync();
+                StatusTextBlock.Text = "Kullanıma hazır.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Başlangıç Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusTextBlock.Text = "Araçlar eksik veya hatalı.";
+            }
+            finally
+            {
+                DownloadButton.IsEnabled = true;
+                UrlTextBox.IsEnabled = true;
+            }
         }
 
         private void UrlTextBox_GotFocus(object sender, RoutedEventArgs e)
