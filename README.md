@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 ﻿<div align="center">
+=======
+<div align="center">
+>>>>>>> origin/main
   <img src="KickVOD/BANNER.png" alt="KickDownloader Pro Logo" width="350" />
 </div>
 
